@@ -18,14 +18,16 @@ from test_detect import test_detect
 from importlib import import_module
 import pandas
 
+segmentdatapath = config_submit['segment_datapath']
 datapath = config_submit['datapath']
 prep_result_path = config_submit['preprocess_result_path']
 skip_prep = config_submit['skip_preprocessing']
 skip_detect = config_submit['skip_detect']
 
 if not skip_prep:
-    testsplit = full_prep(datapath,prep_result_path,
-                          n_worker = config_submit['n_worker_preprocessing'],
+    #testsplit对应的是病人id的集合，每个id都有一个id_label.npy的文件存储了该病人的每个结节对应的lable信息的集合！！此处主要为了告知lable的存储文件的。
+    testsplit = full_prep(segmentdatapath,datapath, prep_result_path,
+                          n_worker=config_submit['n_worker_preprocessing'],
                           use_existing=config_submit['use_exsiting_preprocessing'])
 else:
     testsplit = os.listdir(datapath)
@@ -52,58 +54,10 @@ if not skip_detect:
     split_comber = SplitComb(sidelen,config1['max_stride'],config1['stride'],margin,pad_value= config1['pad_value'])
 
     dataset = DataBowl3Detector(testsplit,config1,phase='test',split_comber=split_comber)
-    test_loader = DataLoader(dataset,batch_size = 1,
-        shuffle = False,num_workers = 32,pin_memory=False,collate_fn =collate)
+    test_loader = DataLoader(dataset,batch_size = 1,shuffle = False,num_workers = 32,pin_memory=False,collate_fn =collate)
 
     test_detect(test_loader, nod_net, get_pbb, bbox_result_path,config1,n_gpu=config_submit['n_gpu'])
 
-    
-
-
-casemodel = import_module(config_submit['classifier_model'].split('.py')[0])
-casenet = casemodel.CaseNet(topk=5)
-config2 = casemodel.config
-checkpoint = torch.load(config_submit['classifier_param'])
-casenet.load_state_dict(checkpoint['state_dict'])
-
-torch.cuda.set_device(0)
-casenet = casenet.cuda()
-cudnn.benchmark = True
-casenet = DataParallel(casenet)
-
-filename = config_submit['outputfile']
 
 
 
-def test_casenet(model,testset):
-    data_loader = DataLoader(
-        testset,
-        batch_size = 1,
-        shuffle = False,
-        num_workers = 32,
-        pin_memory=True)
-    #model = model.cuda()
-    model.eval()
-    predlist = []
-    
-    #     weight = torch.from_numpy(np.ones_like(y).float().cuda()
-    for i,(x,coord) in enumerate(data_loader):
-
-        coord = Variable(coord).cuda()
-        x = Variable(x).cuda()
-        nodulePred,casePred,_ = model(x,coord)
-        predlist.append(casePred.data.cpu().numpy())
-        #print([i,data_loader.dataset.split[i,1],casePred.data.cpu().numpy()])
-    predlist = np.concatenate(predlist)
-    return predlist    
-config2['bboxpath'] = bbox_result_path
-config2['datadir'] = prep_result_path
-
-
-
-dataset = DataBowl3Classifier(testsplit, config2, phase = 'test')
-predlist = test_casenet(casenet,dataset).T
-anstable = np.concatenate([[testsplit],predlist],0).T
-df = pandas.DataFrame(anstable)
-df.columns={'id','cancer'}
-df.to_csv(filename,index=False)

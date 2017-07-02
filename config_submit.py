@@ -1,5 +1,6 @@
 config = {'datapath':'/work/DataBowl3/stage2/stage2/',
           'preprocess_result_path':'./prep_result/',
+          'segment_datapath':'/',
           'outputfile':'prediction.csv',
           
           'detector_model':'net_detector',
