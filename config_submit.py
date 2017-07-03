@@ -1,7 +1,13 @@
-config = {'datapath':'/work/DataBowl3/stage2/stage2/',
-          'preprocess_result_path':'./prep_result/',
-          'segment_datapath':'/',
+config = {'datapath':'/home/ubuntu/DSB2017/luna/raw/',
+          'segment_datapath':'/home/ubuntu//DSB2017/luna/segment/',
           'outputfile':'prediction.csv',
+          
+          'luna_raw':'./luna/raw/',
+          'luna_segment':'./luna/segment/',
+          'luna_data':'./luna/allset',
+          'preprocess_result_path':'/home/ubuntu/DSB2017/preprocess/',      
+          'luna_abbr':'/home/ubuntu/DSB2017/training/detector/labels/shorter.csv',
+
           
           'detector_model':'net_detector',
          'detector_param':'./model/detector.ckpt',

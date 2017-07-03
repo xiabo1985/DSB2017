@@ -12,6 +12,9 @@ from functools import partial
 from step1 import step1_python
 import warnings
 import SimpleITK as sitk
+from config_submit import config as config_submit
+import pandas
+import shutil
 
 def process_mask(mask):
     convex_mask = np.copy(mask)
@@ -60,60 +63,12 @@ def resample(imgs, spacing, new_spacing,order = 2):
     else:
         raise ValueError('wrong shape')
 
-#一个文件作为一个id,调用一次savenpy(),将改文件存储为.npy文件
-#filelist
-def savenpy(id,filelist,prep_folder,data_path,use_existing=True):      
-    resolution = np.array([1,1,1])
-    name = filelist[id]
-    if use_existing:
-        if os.path.exists(os.path.join(prep_folder,name+'_label.npy')) and os.path.exists(os.path.join(prep_folder,name+'_clean.npy')):
-            print(name+' had been done')
-            return
-    try:
-        im, m1, m2, spacing = step1_python(os.path.join(data_path,name))   #  step1_python
-        Mask = m1+m2
-        
-        newshape = np.round(np.array(Mask.shape)*spacing/resolution)
-        xx,yy,zz= np.where(Mask)
-        box = np.array([[np.min(xx),np.max(xx)],[np.min(yy),np.max(yy)],[np.min(zz),np.max(zz)]])
-        box = box*np.expand_dims(spacing,1)/np.expand_dims(resolution,1)
-        box = np.floor(box).astype('int')
-        margin = 5
-        extendbox = np.vstack([np.max([[0,0,0],box[:,0]-margin],0),np.min([newshape,box[:,1]+2*margin],axis=0).T]).T
-        extendbox = extendbox.astype('int')
 
-
-
-        convex_mask = m1
-        dm1 = process_mask(m1)
-        dm2 = process_mask(m2)
-        dilatedMask = dm1+dm2
-        Mask = m1+m2
-        extramask = dilatedMask ^ Mask
-        bone_thresh = 210
-        pad_value = 170
-
-        im[np.isnan(im)]=-2000
-        sliceim = lumTrans(im)
-        sliceim = sliceim*dilatedMask+pad_value*(1-dilatedMask).astype('uint8')
-        bones = sliceim*extramask>bone_thresh
-        sliceim[bones] = pad_value
-		
-		
-        sliceim1,_ = resample(sliceim,spacing,resolution,order=1)
-        sliceim2 = sliceim1[extendbox[0,0]:extendbox[0,1],
-                    extendbox[1,0]:extendbox[1,1],
-                    extendbox[2,0]:extendbox[2,1]]
-        sliceim = sliceim2[np.newaxis,...]
-        np.save(os.path.join(prep_folder,name+'_clean'),sliceim)
-        np.save(os.path.join(prep_folder,name+'_label'),np.array([[0,0,0,0]]))
-    except:
-        print('bug in '+name)
-        raise
-    print(name+' done')
 
 def savenpy_luna(id ,filelist,luna_segment,luna_data,savepath,use_existing=True):
+    print('start savenpy_luna...')
     resolution = np.array([1, 1, 1])
+
     name = filelist[id]
     if use_existing:
         if os.path.exists(os.path.join(savepath, name + '_label.npy')) and os.path.exists(
@@ -168,6 +123,7 @@ def savenpy_luna(id ,filelist,luna_segment,luna_data,savepath,use_existing=True)
         print('bug in ' + name)
         raise
     print(name + ' done')
+    print('end savenpy_luna...')
 
 def load_itk_image(filename):
     with open(filename) as f:
@@ -188,8 +144,80 @@ def load_itk_image(filename):
 
     return numpyImage, numpyOrigin, numpySpacing, isflip
 
-    #预处理  data_path 路径下的CT影像图像 存储到npy文件中
-def full_prep(luna_segment_path,data_path,prep_folder,n_worker = None,use_existing=True):
+def prepare_luna():
+    print('start changing luna name')
+    luna_raw = config_submit['luna_raw']  
+    luna_abbr = config_submit['luna_abbr']
+    luna_data = config_submit['luna_data']
+    luna_segment = config_submit['luna_segment']
+    finished_flag = '.flag_prepareluna'
+
+    if not os.path.exists(finished_flag):
+
+        subsetdirs = [os.path.join(luna_raw, f) for f in os.listdir(luna_raw) if
+                      f.startswith('subset') and os.path.isdir(
+                          os.path.join(luna_raw, f))]  
+        if not os.path.exists(luna_data):
+            os.mkdir(luna_data)
+
+        abbrevs = np.array(
+            pandas.read_csv(config_submit['luna_abbr'], header=None))  
+        namelist = list(abbrevs[:, 1])
+        ids = abbrevs[:, 0]
+
+        for d in subsetdirs:
+            files = os.listdir(d)
+            files.sort()
+            for f in files:  
+                name = f[:-4]
+                id = ids[namelist.index(name)]
+                filename = '0' * (3 - len(str(id))) + str(id)
+                shutil.move(os.path.join(d, f), os.path.join(luna_data, filename + f[-4:]))
+                print(os.path.join(luna_data, str(id) + f[-4:]))
+
+        files = [f for f in os.listdir(luna_data) if f.endswith('mhd')]
+        for file in files:
+            with open(os.path.join(luna_data, file), 'r') as f:
+                content = f.readlines()
+                id = file.split('.mhd')[0]
+                filename = '0' * (3 - len(str(id))) + str(id)
+                content[-1] = 'ElementDataFile = ' + filename + '.raw\n'
+                print(content[-1])
+            with open(os.path.join(luna_data, file), 'w') as f:
+                f.writelines(content)
+
+        seglist = os.listdir(luna_segment)
+        for f in seglist:
+            if f.endswith('.mhd'):
+
+                name = f[:-4]
+                lastfix = f[-4:]
+            else:
+                name = f[:-5]
+                lastfix = f[-5:]
+            if name in namelist:
+                id = ids[namelist.index(name)]
+                filename = '0' * (3 - len(str(id))) + str(id)
+
+                shutil.move(os.path.join(luna_segment, f), os.path.join(luna_segment, filename + lastfix))
+                print(os.path.join(luna_segment, filename + lastfix))
+
+        files = [f for f in os.listdir(luna_segment) if f.endswith('mhd')]
+        for file in files:
+            with open(os.path.join(luna_segment, file), 'r') as f:
+                content = f.readlines()
+                id = file.split('.mhd')[0]
+                filename = '0' * (3 - len(str(id))) + str(id)
+                content[-1] = 'ElementDataFile = ' + filename + '.zraw\n'
+                print(content[-1])
+            with open(os.path.join(luna_segment, file), 'w') as f:
+                f.writelines(content)
+    print('end changing luna name')
+    f = open(finished_flag, "w+")
+
+   
+def full_prep(luna_segment_path,datapath,prep_folder,n_worker = None,use_existing=True):
+    prepare_luna()
     warnings.filterwarnings("ignore")
     if not os.path.exists(prep_folder):
         os.mkdir(prep_folder)
@@ -197,14 +225,14 @@ def full_prep(luna_segment_path,data_path,prep_folder,n_worker = None,use_existi
             
     print('starting preprocessing')
     pool = Pool(n_worker)
-    filelist = [f for f in os.listdir(data_path)]
+    filelist = [f for f in os.listdir(datapath)]
     #partial_savenpy = partial(savenpy,filelist=filelist,prep_folder=prep_folder,data_path=data_path,use_existing=use_existing)
-    partial_savenpy = partial(savenpy_luna, filelist=filelist, luna_segment=luna_segment_path, data_path=data_path,
-                              prep_folder=prep_folder,
+    partial_savenpy = partial(savenpy_luna, filelist=filelist, luna_segment=luna_segment_path, luna_data=datapath,
+                              savepath=prep_folder,
                               use_existing=use_existing)
 
     N = len(filelist)
-    _=pool.map(partial_savenpy,range(N))
+    _=pool.map(partial_savenpy,range(N-2))
     pool.close()
     pool.join()
     print('end preprocessing')

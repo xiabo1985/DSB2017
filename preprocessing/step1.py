@@ -6,12 +6,12 @@ import scipy.ndimage
 import matplotlib.pyplot as plt
 
 from skimage import measure, morphology
+from config_training import config
 
-
-
+''':param 文件路径  dicom三方库解析kaggle数据'''
 def load_scan(path):
-    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path)]
-    slices.sort(key = lambda x: float(x.ImagePositionPatient[2]))
+    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path)]      #slices为dicom库解析出来的一个令人的二进制的三维数组
+    slices.sort(key = lambda x: float(x.ImagePositionPatient[2]))             #slices中的所有层数据按照每层的 “ImagePositionPatient” 数据 “排序”
     if slices[0].ImagePositionPatient[2] == slices[1].ImagePositionPatient[2]:
         sec_num = 2;
         while slices[0].ImagePositionPatient[2] == slices[sec_num].ImagePositionPatient[2]:
@@ -26,10 +26,12 @@ def load_scan(path):
         slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
         
     for s in slices:
-        s.SliceThickness = slice_thickness
+        s.SliceThickness = slice_thickness                                  #为每层的slice设置上层间距
         
     return slices
 
+
+'''原始三维数值转换成“hu”标准     :param 三维数组数据'''
 def get_pixels_hu(slices):
     image = np.stack([s.pixel_array for s in slices])
     # Convert to int16 (from sometimes int16), 
@@ -47,7 +49,7 @@ def get_pixels_hu(slices):
             
         image[slice_number] += np.int16(intercept)
     
-    return np.array(image, dtype=np.int16), np.array([slices[0].SliceThickness] + slices[0].PixelSpacing, dtype=np.float32)
+    return np.array(image, dtype=np.int16), np.array([slices[0].SliceThickness] + slices[0].PixelSpacing, dtype=np.float32)  #TODO:np.array([slices[0].Sli...代表啥？
 
 def binarize_per_slice(image, spacing, intensity_th=-600, sigma=1, area_th=30, eccen_th=0.99, bg_patch_size=10):
     bw = np.zeros(image.shape, dtype=bool)
@@ -225,10 +227,13 @@ def two_lung_only(bw, spacing, max_iter=22, max_ratio=4.8):
 
     return bw1, bw2, bw
 
+'''用来处理kaggle数据的，暂时不管
+    :param 文件路径 
+   :return im、'''
 def step1_python(case_path):
-    case = load_scan(case_path)
-    case_pixels, spacing = get_pixels_hu(case)
-    bw = binarize_per_slice(case_pixels, spacing)
+    case = load_scan(case_path)                     #case 为病人的二进制三维数据
+    case_pixels, spacing = get_pixels_hu(case)      #转换成"hu"单位
+    bw = binarize_per_slice(case_pixels, spacing)   #二值化？？
     flag = 0
     cut_num = 0
     cut_step = 2
@@ -238,46 +243,16 @@ def step1_python(case_path):
         bw, flag = all_slice_analysis(bw, spacing, cut_num=cut_num, vol_limit=[0.68,7.5])
         cut_num = cut_num + cut_step
 
-    bw = fill_hole(bw)
+    bw = fill_hole(bw)     #填充 hole 去除噪点？？
     bw1, bw2, bw = two_lung_only(bw, spacing)
     return case_pixels, bw1, bw2, spacing
     
 if __name__ == '__main__':
-    INPUT_FOLDER = '/work/DataBowl3/stage1/stage1/'
+    #INPUT_FOLDER = '/work/DataBowl3/stage1/stage1/'
+    INPUT_FOLDER = config['stage1_data_path']
     patients = os.listdir(INPUT_FOLDER)
     patients.sort()
     case_pixels, m1, m2, spacing = step1_python(os.path.join(INPUT_FOLDER,patients[25]))
     plt.imshow(m1[60])
     plt.figure()
     plt.imshow(m2[60])
-#     first_patient = load_scan(INPUT_FOLDER + patients[25])
-#     first_patient_pixels, spacing = get_pixels_hu(first_patient)
-#     plt.hist(first_patient_pixels.flatten(), bins=80, color='c')
-#     plt.xlabel("Hounsfield Units (HU)")
-#     plt.ylabel("Frequency")
-#     plt.show()
-    
-#     # Show some slice in the middle
-#     h = 80
-#     plt.imshow(first_patient_pixels[h], cmap=plt.cm.gray)
-#     plt.show()
-    
-#     bw = binarize_per_slice(first_patient_pixels, spacing)
-#     plt.imshow(bw[h], cmap=plt.cm.gray)
-#     plt.show()
-    
-#     flag = 0
-#     cut_num = 0
-#     while flag == 0:
-#         bw, flag = all_slice_analysis(bw, spacing, cut_num=cut_num)
-#         cut_num = cut_num + 1
-#     plt.imshow(bw[h], cmap=plt.cm.gray)
-#     plt.show()
-    
-#     bw = fill_hole(bw)
-#     plt.imshow(bw[h], cmap=plt.cm.gray)
-#     plt.show()
-    
-#     bw1, bw2, bw = two_lung_only(bw, spacing)
-#     plt.imshow(bw[h], cmap=plt.cm.gray)
-#     plt.show()

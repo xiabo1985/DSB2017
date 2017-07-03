@@ -89,14 +89,14 @@ def lumTrans(img):
     newimg = (newimg*255).astype('uint8')
     return newimg
 
-
-def savenpy(id,annos,filelist,data_path,prep_folder):        
+'''只用来处理kaggle数据，暂时不管  save kaggle data to npy form from fileName'''
+def savenpy(id,annos,filelist,data_path,prep_folder):
     resolution = np.array([1,1,1])
-    name = filelist[id]
-    label = annos[annos[:,0]==name]
+    name = filelist[id]                                    #kaggle数据文件名字，  应该是id
+    label = annos[annos[:,0]==name]                        #找到该数据对应的label信息   应该是该id对应的多了label信息   TODO:此处疑惑，使用logging
     label = label[:,[3,1,2,4]].astype('float')
     
-    im, m1, m2, spacing = step1_python(os.path.join(data_path,name))
+    im, m1, m2, spacing = step1_python(os.path.join(data_path,name))     #某个病人所在的文件夹路径
     Mask = m1+m2
     
     newshape = np.round(np.array(Mask.shape)*spacing/resolution)
@@ -158,30 +158,35 @@ def full_prep(step1=True,step2 = True):
     finished_flag = '.flag_prepkaggle'
     
     if not os.path.exists(finished_flag):
-        alllabelfiles = config['stage1_annos_path']
-        tmp = []
+        #start deal label section
+        alllabelfiles = config['stage1_annos_path']             #./detector/labels/  路径下的若干个如label_job5.csv、abel_job0.csv含label信息的文件 ，文件中 包含id，x，y.z,半径四个信息
+        tmp = []                                                   #将上面的几个目录中的文件信息都读取到tmp数组
         for f in alllabelfiles:
             content = np.array(pandas.read_csv(f))
             content = content[content[:,0]!=np.nan]
-            tmp.append(content[:,:5])
-        alllabel = np.concatenate(tmp,0)
-        filelist = os.listdir(config['stage1_data_path'])
+            tmp.append(content[:,:5])                               #原有的文件也就只有5列信息。
+        alllabel = np.concatenate(tmp,0)                            #二维数组被拉成只有一行的数据如：( [ (1,2,3), (4,5,6) ] )　　--.>( [ 1,2,3,4,5,6 ] )　　
+        # end deal label section
 
+
+        #make blank save dir of the preprossed data
         if not os.path.exists(prep_folder):
             os.mkdir(prep_folder)
-        #eng.addpath('preprocessing/',nargout=0)
 
+
+        #start deal kaggle data
         print('starting preprocessing')
         pool = Pool()
-        filelist = [f for f in os.listdir(data_path)]
+        filelist = [f for f in os.listdir(data_path)]               #data_path 就是 filelist文件列表的 所在目录
         partial_savenpy = partial(savenpy,annos= alllabel,filelist=filelist,data_path=data_path,prep_folder=prep_folder )
 
         N = len(filelist)
             #savenpy(1)
-        _=pool.map(partial_savenpy,range(N))
+        _=pool.map(partial_savenpy,range(N))                        #filelist下每一个文件作为参数，调用一次savenpy()方法
         pool.close()
         pool.join()
         print('end preprocessing')
+        # end deal kaggle data
     f= open(finished_flag,"w+")        
 
 def savenpy_luna(id,annos,filelist,luna_segment,luna_data,savepath):
@@ -371,7 +376,6 @@ def prepare_luna():
     f= open(finished_flag,"w+")
     
 if __name__=='__main__':
-    full_prep(step1=True,step2=True)
+    full_prep(step1=True,step2=True)            #step1,step2 无用
     prepare_luna()
     preprocess_luna()
-    

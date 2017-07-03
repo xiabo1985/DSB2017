@@ -44,7 +44,7 @@ class DataBowl3Detector(Dataset):
         self.lunanames = [f for f in self.filenames if len(f.split('/')[-1].split('_')[0])<20]
         
         labels = []
-        
+
         for idx in idcs:
             if config['luna_raw'] ==True:
                 try:
