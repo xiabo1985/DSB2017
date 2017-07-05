@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
 import dicom
@@ -6,7 +9,6 @@ import scipy.ndimage
 import matplotlib.pyplot as plt
 
 from skimage import measure, morphology
-from config_training import config
 
 ''':param 文件路径  dicom三方库解析kaggle数据'''
 def load_scan(path):
@@ -248,8 +250,7 @@ def step1_python(case_path):
     return case_pixels, bw1, bw2, spacing
     
 if __name__ == '__main__':
-    #INPUT_FOLDER = '/work/DataBowl3/stage1/stage1/'
-    INPUT_FOLDER = config['stage1_data_path']
+    INPUT_FOLDER = '/work/DataBowl3/stage1/stage1/'
     patients = os.listdir(INPUT_FOLDER)
     patients.sort()
     case_pixels, m1, m2, spacing = step1_python(os.path.join(INPUT_FOLDER,patients[25]))

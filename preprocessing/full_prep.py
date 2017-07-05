@@ -68,8 +68,9 @@ def resample(imgs, spacing, new_spacing,order = 2):
 def savenpy_luna(id ,filelist,luna_segment,luna_data,savepath,use_existing=True):
     print('start savenpy_luna...')
     resolution = np.array([1, 1, 1])
-
     name = filelist[id]
+    #name = name[:-4]
+    #print ('name' + name)
     if use_existing:
         if os.path.exists(os.path.join(savepath, name + '_label.npy')) and os.path.exists(
                 os.path.join(savepath, name + '_clean.npy')):
@@ -144,19 +145,18 @@ def load_itk_image(filename):
 
     return numpyImage, numpyOrigin, numpySpacing, isflip
 
-def prepare_luna():
+def prepare_luna(luna_segment,luna_raw):
     print('start changing luna name')
-    luna_raw = config_submit['luna_raw']  
     luna_abbr = config_submit['luna_abbr']
     luna_data = config_submit['luna_data']
-    luna_segment = config_submit['luna_segment']
     finished_flag = '.flag_prepareluna'
-
+    
     if not os.path.exists(finished_flag):
-
+    
         subsetdirs = [os.path.join(luna_raw, f) for f in os.listdir(luna_raw) if
                       f.startswith('subset') and os.path.isdir(
                           os.path.join(luna_raw, f))]  
+        print subsetdirs
         if not os.path.exists(luna_data):
             os.mkdir(luna_data)
 
@@ -164,7 +164,9 @@ def prepare_luna():
             pandas.read_csv(config_submit['luna_abbr'], header=None))  
         namelist = list(abbrevs[:, 1])
         ids = abbrevs[:, 0]
-
+        print ([os.path.join(luna_raw, f) for f in os.listdir(luna_raw) if
+                      f.startswith('subset') and os.path.isdir(
+                          os.path.join(luna_raw, f))]  )
         for d in subsetdirs:
             files = os.listdir(d)
             files.sort()
@@ -213,26 +215,32 @@ def prepare_luna():
             with open(os.path.join(luna_segment, file), 'w') as f:
                 f.writelines(content)
     print('end changing luna name')
-    f = open(finished_flag, "w+")
+    f= open(finished_flag,"w+")
 
-   
-def full_prep(luna_segment_path,datapath,prep_folder,n_worker = None,use_existing=True):
-    prepare_luna()
+
+
+def full_prep(luna_segment_path,luna_raw_path,prep_folder,n_worker = None,use_existing=True):
+    prepare_luna(luna_segment_path,luna_raw_path)
+
     warnings.filterwarnings("ignore")
+
+    luna_data = config_submit['luna_data']
+
+    filelist = [f.split('.mhd')[0] for f in os.listdir(luna_data) if f.endswith('.mhd')]
+
     if not os.path.exists(prep_folder):
         os.mkdir(prep_folder)
 
-            
+        
     print('starting preprocessing')
     pool = Pool(n_worker)
-    filelist = [f for f in os.listdir(datapath)]
     #partial_savenpy = partial(savenpy,filelist=filelist,prep_folder=prep_folder,data_path=data_path,use_existing=use_existing)
-    partial_savenpy = partial(savenpy_luna, filelist=filelist, luna_segment=luna_segment_path, luna_data=datapath,
-                              savepath=prep_folder,
-                              use_existing=use_existing)
+    partial_savenpy = partial(savenpy_luna, filelist=filelist, luna_segment=luna_segment_path, luna_data=luna_data,
+                          savepath=prep_folder,
+                          use_existing=use_existing)
 
     N = len(filelist)
-    _=pool.map(partial_savenpy,range(N-2))
+    _=pool.map(partial_savenpy,range(N))
     pool.close()
     pool.join()
     print('end preprocessing')

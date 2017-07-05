@@ -18,28 +18,28 @@ from test_detect import test_detect
 from importlib import import_module
 import pandas
 
-segmentdatapath = config_submit['segment_datapath']
-datapath = config_submit['datapath']
+luna_segment = config_submit['luna_segment']
+luna_raw = config_submit['luna_raw']
 prep_result_path = config_submit['preprocess_result_path']
 skip_prep = config_submit['skip_preprocessing']
 skip_detect = config_submit['skip_detect']
 
 if not skip_prep:
-    testsplit = full_prep(segmentdatapath,datapath, prep_result_path,
+    testsplit = full_prep(luna_segment,luna_raw, prep_result_path,
                           n_worker=config_submit['n_worker_preprocessing'],
                           use_existing=config_submit['use_exsiting_preprocessing'])
 else:
-    testsplit = os.listdir(datapath)
+    testsplit = os.listdir(luna_raw)
 
 nodmodel = import_module(config_submit['detector_model'].split('.py')[0])
 config1, nod_net, loss, get_pbb = nodmodel.get_model()
 checkpoint = torch.load(config_submit['detector_param'])
 nod_net.load_state_dict(checkpoint['state_dict'])
 
-#torch.cuda.set_device(0)
+torch.cuda.set_device(0)
 nod_net = nod_net.cuda()
 cudnn.benchmark = True
-#nod_net = DataParallel(nod_net)
+nod_net = DataParallel(nod_net)
 
 bbox_result_path = './bbox_result'
 if not os.path.exists(bbox_result_path):

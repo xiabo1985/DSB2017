@@ -46,6 +46,7 @@ class DataBowl3Detector(Dataset):
         labels = []
 
         for idx in idcs:
+            #idcs = idcs[:-4]#keyee add on 20170704
             if config['luna_raw'] ==True:
                 try:
                     l = np.load(os.path.join(data_dir, '%s_label_raw.npy' % idx))

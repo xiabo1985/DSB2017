@@ -21,6 +21,7 @@ import sys
 sys.path.append('../preprocessing')
 from step1 import step1_python
 import warnings
+import logging
 
 def resample(imgs, spacing, new_spacing,order=2):
     if len(imgs.shape)==3:
@@ -46,10 +47,13 @@ def worldToVoxelCoord(worldCoord, origin, spacing):
     voxelCoord = stretchedVoxelCoord / spacing
     return voxelCoord
 
+
+''':param 文件路径 return: ct影像的numpyImage、numpyOrigin.numpySpacing、isflip'''
 def load_itk_image(filename):
     with open(filename) as f:
         contents = f.readlines()
-        line = [k for k in contents if k.startswith('TransformMatrix')][0]
+        line = [k for k in contents if k.startswith('TransformMatrix')][0]          #获取病人的mhd文件中包含以“TransformMatrix”开头的那一行
+        logging.warning('start TransformMatrix:%s' %(line))
         transformM = np.array(line.split(' = ')[1].split(' ')).astype('float')
         transformM = np.round(transformM)
         if np.any( transformM!=np.array([1,0,0, 0, 1, 0, 0, 0, 1])):
